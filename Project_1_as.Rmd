@@ -1,0 +1,724 @@
+---
+title: 'PHP2550: Project 1'
+author: "Alitzel Serrano Laguna"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(message = F)
+knitr::opts_chunk$set(warning = F)
+```
+
+### Overview 
+
+The data used in this project came from merging (see pda_project.R) study data of 
+both parent and child into a dataset containing parent ID as a unique identifier.
+The data had 49 total parents and included 77 total variables relating to 
+socioeconomic status, parent smoking status during and after pregnancy at 
+different time points, parent and baby cotinine levels, 
+children substance use, and externalizing and self-regulation variables. In
+summary, this report is sectioned into the following  parts: reformatting and 
+missing data, baseline characteristics, relevant variables and 
+socioeconomic covariates, correlation and composite scores, and aims.
+
+### Reformatting 
+
+Reformatting included changing character type to categorical variables, and 
+numeric variables to categorical variables, and correcting data entry errors. 
+These variables were reformatted to allow for easier analysis (see code appendix). 
+For example, the variable **mom_numcig** was classified as character and included
+entries such as "2 black and miles a day" and ""44989". The 44989 cigarettes
+smoked per day was identified as an outlier and potentially a data entry error and
+changed to NA.
+
+In the initial summary of missing data by column, the reported number of substance  
+use for 30-days resulted in high percentages. In further observing the data, 
+NA values for those columns were then coded 0, if the corresponding 
+ever used a substance variable was 0=No. 
+
+
+```{r}
+#Load Libraries
+library(naniar)
+library(tidyverse)
+library(gtsummary)
+```
+
+
+```{r}
+#Load data
+setwd("/Users/Ali23/OneDrive/Desktop/PDA/")
+data <- read.csv("project1.csv")  #project.csv data created from pda_project.R
+```
+
+
+### Missing Data Patterns
+
+In observing missing data, it was found that 63 variables had at least 
+one missing observation. The variable **mom_smoke_pp1** with 79.59% missing data 
+had by far the highest percent missing. **mom_smoke_pp2** had 40.82% missing. All
+other SDP and postpartum smoking variables had less than 20% missing data. ETS **smoke_exposure**
+variables had similar missing percentages ranging around 20%-23%. Outcome variables such as
+**childasd**, **num_alc_30**, **num_e_cigs_30**, and **bpm_int** also had over 20% missing. 
+Parental monitoring question also had a high percentage missing. Income and child's sex
+were also variables with more than 25% missing data. We also see the same number of 
+missing values for many related variables, potentially belonging to the same participants
+who had missing data across. 
+
+Additionally it was observed that there was substantial missing data for SDP at 16, 22, and 32 weeks and for postpartum 
+(PP smoking). Knowing that cigarette smoking is an additive substance, to deal with this issue, it was assumed that if a parent smoked or did not smoke at 16 and 22 weeks, 
+then the same behavior continued at **32weeks**. It was also assumed that if a parent 
+smoked or did not smoke at 22 and 32 weeks and at postpartum visit 2, then the 
+same behavior continued at **postpartum visit 1**. No assumptions were made for
+environmental tobacco smoke (ETS) exposure variables because this was more subject to
+change compared to parent smoking behavior. 
+
+In the missing data by rows, eight parents 
+had greater than 65% missing variable data. Due to the small sample size N = 49, 
+these participants were kept in the analysis except one. This parent with ID: 53902 was removed as
+they were missing all cotinine measurements and all SDP/ postpartum/ ETS data. If a parent had at least one category of SDP, PP, and ETS as well as at least one cotinine measure, then based on this data, it would be possible to calculate a propensity score or conduct multiple imputation
+based on parents with similar information. This was not done in this report, but in further analysis of this data it 
+should be considered.
+
+
+Table 1 reports variables who had greater than 25% missing data.
+Table 2 reports greater than 50% missing data by parent.
+
+
+```{r}
+#Reformatting Variables and missing data
+
+#create NA for entries "" for mom_num_cig & SDP and post-pregnancy smoking var
+data[,c(21:28)] <- lapply(data[,c(21:28)], function(x) ifelse(x == "", NA, x))
+
+#change numeric to categorical for sex, ethnic, race, edu, employ vars
+data[,c(3:13)] <- data[,c(3:13)] %>%
+  mutate_if(is.numeric, factor)  # for parent
+data[,c(53:61)] <- data[,c(53:61)] %>%
+  mutate_if(is.numeric, factor)  # for child
+
+#for substance use, if child answered no, set corresponding numeric value to 0
+data$num_cigs_30 <- ifelse(data$cig_ever == 0, 0, data$num_cigs_30)
+data$num_alc_30 <- ifelse(data$alc_ever == 0, 0, data$num_alc_30)
+data$num_mj_30 <- ifelse(data$mj_ever == 0, 0, data$num_mj_30)
+data$num_e_cigs_30 <- ifelse(data$e_cig_ever == 0, 0,  data$num_e_cigs_30)
+
+## changing the mom_num_cig variable ##
+data$mom_numcig <- as.character(data$mom_numcig)
+#set "none" equal to 0
+data$mom_numcig <- ifelse(data$mom_numcig == "None",  "0", data$mom_numcig )
+data$mom_numcig <- ifelse(data$mom_numcig == "2 black and miles a day",  "2", 
+                          data$mom_numcig)
+#average 20-25 to 22.5
+data$mom_numcig <- ifelse(data$mom_numcig == "20-25","22.5",data$mom_numcig)
+#change 44989 to NA
+data$mom_numcig <- ifelse(data$mom_numcig == "44989",NA,data$mom_numcig)
+data$mom_numcig <- as.numeric(data$mom_numcig)
+
+#changing character variables to factors/ numeric
+data$income <- as.numeric(data$income)
+
+data <- data %>%
+  mutate_if(is.character, factor)
+
+#summarize missingness by column
+miss_var <- as.data.frame(miss_var_summary(data)) 
+miss_var$pct_miss <- round(miss_var$pct_miss, 2)
+
+miss_var[miss_var$pct_miss > 25,] %>%  
+  knitr::kable(caption = "Summary of Missing Data by Variable",
+                                                    col.names = c("Variable",
+                                                                  "Count",
+                                                                  "Percentage")) %>%  
+  kableExtra::kable_styling( latex_options = c("striped"),
+                             stripe_color = "gray!15")
+
+```
+
+
+
+```{r}
+#summarize missingness by row
+pct_na_r <- rowSums(is.na(data)) / ncol(data) * 100
+row_na <- data.frame(parent_id = data$parent_id, pct_na = pct_na_r)
+row_na <- row_na[row_na$pct_na > 50,] %>% arrange(desc(pct_na)) # participants w/ greater than 50% missing
+
+row_na %>%  
+  knitr::kable(caption = "Summary of Missing Data by Parent",
+                                                    col.names = c("Parent ID",
+                                                                  "Percentage missing")) %>%  
+  kableExtra::kable_styling(latex_options = c("striped"),
+                             stripe_color = "gray!15")
+
+```
+
+
+```{r}
+#manually imputing values for SDP and PP
+data$mom_smoke_32wk  <- ifelse(data$mom_smoke_16wk == "1=Yes" & 
+                                 data$mom_smoke_22wk == "1=Yes",
+                  "1=Yes", as.character(data$mom_smoke_32wk) )
+
+data$mom_smoke_pp1 <- ifelse(data$mom_smoke_22wk == "1=Yes" & 
+                               data$mom_smoke_32wk == "1=Yes" &
+                               data$mom_smoke_pp2 == "1=Yes",
+                  "1=Yes", as.character(data$mom_smoke_pp1) )
+ 
+```
+
+
+```{r, include = FALSE}
+#exclusion criteria - missing all SDP/postpartum/ETS AND cotinine measurements
+for (i in 1:nrow(data))
+{
+    if (sum(is.na(data[i,22:24])) == 3 &  sum(is.na(data[i,25:28])) == 4 & 
+        sum(is.na(data[i,37:42])) == 6)
+        
+    {
+      if(
+        sum(is.na(data[i,29:31])) == 3)
+        print("") #print(i) ### --- parent 53902
+    }
+}
+
+```
+
+
+
+### Baseline Characteristics 
+
+For this sample, 53.06% of parents were white and 26.53% of parents were Hispanic/Latino.
+This sample did not include asian nor black parents. 30.61% of children were black,
+30.61% were Hispanic/Latino, 38.78% were white, and none identified as asian. Of the
+children, 26.53% were female, and 46.94% were male.
+
+The mean income was 44,424 with 20,000 and 66,250 being the 25th and 75th quartile.
+The max and min, respectively, for income are 265,000 and 760. 54% of parents are
+employed full-time and 29% are unemployed. Also, 37% of parents had some college 
+education and 24% have a 4-year degree.
+
+```{r}
+#socioeconomic characteristics for sample
+data %>% select(income, employ, pedu) %>%
+  tbl_summary(missing_text = "Missing") %>% 
+  knitr::kable(caption = "Summary of Socioeconomic Status",
+                                                    col.names = c("Characteristics",
+                                                                  "N = 49")) %>%  
+  kableExtra::kable_styling(latex_options = c("striped"),
+                             stripe_color = "gray!15")
+
+max(data$income, na.rm = T)
+min(data$income, na.rm = T)
+
+```
+
+
+```{r}
+
+#baseline characteristics for sample
+baseline_cat <- data %>% select(psex,plang,pethnic, pasian,
+pblack, pwhite, tsex, tethnic, tasian, tblack, twhite) %>%
+  gather(variable, value) %>%  # Reshape data to long format
+  group_by(variable, value) %>%  # Group by variable and value
+  summarise(count = n(),  # Count "Yes" and "No"
+            percentage = round(n() / nrow(data) * 100,2)) %>%   # Calculate percentage
+mutate(count_percentage = paste(count, " (", percentage, "%)", sep = ""))  # Combine count and percentage
+
+baseline_cat$value <- as.factor(baseline_cat$value)
+
+# Pivot the data to have "Yes"/ "No" columns
+summary_df <- baseline_cat %>% select(variable, value, count_percentage) %>%
+  pivot_wider(names_from = value, values_from = count_percentage)
+
+summary_df[,] <- lapply(summary_df[,], function(x)ifelse(is.na(x), "0 (0%)", x))
+
+summary_df  %>% 
+knitr::kable(caption = "Summary of Parent and Child Demographics",
+                                                    col.names = c("Characteristic",
+                                                                  "No", "Yes", 
+                                                                  "NA", "Prefer Not To Answer")) %>%  
+  kableExtra::kable_styling(latex_options = c("striped"),
+                             stripe_color = "gray!15")
+
+```
+
+
+### Reported Smoking Status 
+
+For smoking status by 
+
+
+```{r}
+##### This code section focuses on SDP variables #####
+#summary of yes, no, na
+t1 <- table(data$mom_smoke_16wk , useNA = "always")
+t2 <- table(data$mom_smoke_22wk, useNA = "always")
+t3 <- table(data$mom_smoke_32wk, useNA = "always")
+#get percentages
+df1 <- t(as.data.frame(prop.table(t1) * 100))
+df2 <- t(as.data.frame(prop.table(t2) * 100))
+df3 <-  t(as.data.frame(prop.table(t3) * 100))
+#create df containing all data
+final <- rbind((df1)[2,],df2[2,],df3[2,])
+colnames(final) <- c("Yes", "No", "NA")
+time <- data.frame(Time = c("16wk", "22wk", "32wk"))
+final <- cbind(time, final)
+final$Yes <- as.numeric(final$Yes)
+final$No <- as.numeric(final$No)
+final$"NA" <- as.numeric(final$"NA")
+#change to long format for plotting
+final2 <- final %>% pivot_longer(cols = 'Yes':'NA',
+                               names_to = "Category",
+                               values_to = "Per")
+#plot bar chart
+SDP_plot <- ggplot(final2, aes(x = Time, y = Per, fill = Category)) +
+  geom_col() +
+  labs(x = "Percentage", title = "Parent Smoking Status During Pregnancy") +
+  geom_text(aes(label = Per), position = position_stack(reverse = F,vjust = 0.5))
+  
+
+##### This code section focuses on smoking PP variables #####
+#summary of yes, no, na
+t1 <- table(data$mom_smoke_pp1 , useNA = "always")
+t2 <- table(data$mom_smoke_pp2, useNA = "always")
+t3 <- table(data$mom_smoke_pp12wk, useNA = "always")
+t4 <- table(data$mom_smoke_pp6mo, useNA = "always")
+#get percentages
+df1 <- t(as.data.frame(prop.table(t1) * 100))
+df2 <- t(as.data.frame(prop.table(t2) * 100))
+df3 <-  t(as.data.frame(prop.table(t3) * 100))
+df4 <-  t(as.data.frame(prop.table(t4) * 100))
+#create df containing all data
+final <- rbind((df1)[2,],df2[2,],df3[2,],df4[2,])
+colnames(final) <- c("Yes", "No", "NA")
+time <- data.frame(Time = c("Postpartum V1", "Postpartum V2", "12wk postpartum",
+                            "6mo postpartum"))
+final <- cbind(time, final)
+final$Yes <- as.numeric(final$Yes)
+final$No <- as.numeric(final$No)
+final$"NA" <- as.numeric(final$"NA")
+#change to long format for plotting
+final2 <- final %>% pivot_longer(cols = 'Yes':'NA',
+                               names_to = "Category",
+                               values_to = "Per")
+#plot bar chart
+pp_plot <- ggplot(final2, aes(x = Time, y = Per, fill = Category)) +
+  geom_col() +
+  labs(x = "Percentage", title = "Parent Smoking Status Postpartum") +
+  geom_text(aes(label = Per), position = position_stack(reverse = F,vjust = 0.5))
+  
+
+
+
+##### This code section focuses on ETS variables #####
+#summary of yes, no, na
+t1 <- table(data$smoke_exposure_6mo , useNA = "always")
+t2 <- table(data$smoke_exposure_12mo, useNA = "always")
+t3 <- table(data$smoke_exposure_2yr, useNA = "always")
+t4 <- table(data$smoke_exposure_3yr, useNA = "always")
+t5 <- table(data$smoke_exposure_4yr, useNA = "always")
+t6 <- table(data$smoke_exposure_5yr, useNA = "always")
+
+#get percentages
+df1 <- t(as.data.frame(prop.table(t1) * 100))
+df2 <- t(as.data.frame(prop.table(t2) * 100))
+df3 <-  t(as.data.frame(prop.table(t3) * 100))
+df4 <-  t(as.data.frame(prop.table(t4) * 100))
+df5 <-  t(as.data.frame(prop.table(t5) * 100))
+df6 <-  t(as.data.frame(prop.table(t6) * 100))
+
+#create df containing all data
+final <- rbind((df1)[2,],df2[2,],df3[2,],df4[2,], df5[2,], df6[2,])
+colnames(final) <- c("Yes", "No", "NA")
+time <- data.frame(Time = c("ETS 6mo", "ETS 12mo", 
+                            "ETS 2yr","ETS 3yr","ETS 4yr","ETS 5yr"))
+final <- cbind(time, final)
+final$Yes <- as.numeric(final$Yes)
+final$No <- as.numeric(final$No)
+final$"NA" <- as.numeric(final$"NA")
+#change to long format for plotting
+final2 <- final %>% pivot_longer(cols = 'Yes':'NA',
+                               names_to = "Category",
+                               values_to = "Per")
+#plot line chart
+ETS_plot <- ggplot(final2, aes(x = Time, y = Per,col = Category)) +
+  geom_line(aes(group = Category)) +
+  geom_point() +
+  labs(x = "Percentage", title = "Environmental Tobacco Exposure") 
+  
+
+```
+
+
+```{r}
+SDP_plot
+pp_plot
+ETS_plot
+```
+
+
+
+
+
+```{r}
+#creating composite SDP/PP/ETS variable
+data$cumSDP <- rowSums(data[,c("mom_smoke_16wk",
+                            "mom_smoke_22wk", 
+                            "mom_smoke_32wk")] == "1=Yes",
+                    na.rm = T)
+
+data$cumPP <- (rowSums(data[,c("mom_smoke_pp12wk",
+                             "mom_smoke_pp6mo")] == "1=Yes",
+                    na.rm = T))
+
+
+data$avgETS <- (((rowSums(data[,c("smoke_exposure_6mo",
+                            "smoke_exposure_12mo")]  == 1, na.rm = T))/2)
+   + (rowSums(data[,c( "smoke_exposure_2yr", "smoke_exposure_3yr", 
+                       "smoke_exposure_4yr", "smoke_exposure_5yr")]  == 1,
+              na.rm = T)))/5
+
+
+```
+
+
+### Composite Scores, Correlations and Possible Associations
+
+The data includes various variables that measure similar characteristics which 
+can be classified relating to self-regulation or externalizing. In observing
+the correlation values between these variables (see correlation table below),
+swan_hyperactive/ swan_inattentive variables, erq_exp_a/ swan_hyperactive,
+are strongly positively correlated. 
+
+bpm_att_p/swan_inattentive, 
+bpm_ext/ swan_hyperactive, childasd/ bpm_att_p
+have a strong positive correlation.
+
+erq_cog_a	swan_hyperactive have a strong negative correlation..
+
+
+From the SDP data, a cumulative SDP (Smoking During Pregnancy) variable was created.
+If a parent reported smoking at 16,22, and 32 weeks, then the cumulative sum and
+grouping was 3. A overall average was also created for smoking postpartum and 
+up to 6months after. An average was selected for these variables as opposed to a 
+cumulative as these variables due to the missing data, particularly smoking reported at postpartum visit 
+1 and 2 had higher percentages of missing data (See table of missing data by 
+column). 
+
+Also composite scores were created by normalizing due to the different scales these
+variables were in. SR was created from ... and Externalizing was created from the composite scores.
+
+The results of bpm from child and parent were not averaged together due to the 
+large differences seen. Also a substance use variable was created due to possible correlations.
+
+
+
+
+#### Observing smoking status and socioeconomic covariate covariates
+#### Examining cotinine measurement data
+
+
+The data also included cotinine measurements at 34 weeks gestation and at 6 months
+postpartum for the parent and child. We compared 
+the mean values for these results across SDP.
+
+Creating a correlation plot for baby cotinine and mom cotinine measurements
+
+```{r}
+plot(data$cotimean_34wk, data$cotimean_pp6mo_baby)
+plot(data$cotimean_pp6mo,data$cotimean_pp6mo_baby)
+plot(data$avgSPP,data$cotimean_pp6mo_baby)
+plot(data$cumSDP,data$cotimean_pp6mo_baby)
+
+plot(data$erq_cog, data$erq_exp)
+plot(data$bpm_att, data$bpm_ext)
+
+plot(data$swan_hyperactive, data$swan_inattentive)
+plot(data$bpm_att, data$swan_inattentive)
+plot(data$bpm_att, data$swan_inattentive)
+cor.test(data$erq_cog, data$bpm_ext)
+
+#select columns of interest relating to SR/EXT
+columns_all <- c("employ","pedu","income","childasd", "cotimean_34wk" ,"cotimean_pp6mo_baby",
+             "cotimean_pp6mo"  ,  "swan_inattentive","swan_hyperactive" ,          "bpm_att_p","bpm_ext_p","bpm_int_p", "ppmq_parental_knowledge", "ppmq_child_disclosure" ,     "ppmq_parental_solicitation", "ppmq_parental_control", "bpm_att_a", "bpm_ext_a",                 
+ "bpm_int_a", "erq_cog_a" , "erq_exp_a" , "bpm_att" , "bpm_ext", "bpm_int",                   
+ "erq_cog"   , "erq_exp" , "pmq_parental_knowledge" , "pmq_child_disclosure",       "pmq_parental_solicitation",  "pmq_parental_control" )
+
+columns_select <- c("childasd", "swan_inattentive","swan_hyperactive" ,          "bpm_att_p","bpm_ext_p","bpm_int_p", "bpm_att_a", "bpm_ext_a",                 
+ "bpm_int_a", "erq_cog_a" , "erq_exp_a" , "bpm_att" , "bpm_ext", "bpm_int",                   
+ "erq_cog"   , "erq_exp" )
+
+
+
+#get correlation matrix          
+subset <- data[,columns_select] %>% select_if(is.numeric) 
+correlation_matrix<- as.data.frame(cor(subset,use = "complete.obs"))
+correlation_matrix<- round(cor(subset,use = "complete.obs"),4)
+#select correlation values > 0.7
+new_matrix<- as.data.frame(as.table(correlation_matrix))
+new_matrix<- new_matrix %>% filter(Freq != 1 & abs(Freq) > 0.7)
+new_matrix[-c(2,3,4,9,13,14),]
+
+#plot of parent smoking behavior
+ggplot(data, aes(x = momcig, y = mom_numcig)) +
+geom_point(alpha = 0.25, size = 2.8) +
+  labs(x = "Number of days", y = "Number of Cigarettes Smoked",
+       main= "Parent smoking behavior in the past 30 days")   #keep
+  
+
+### This code section focuses on normalizing and creating composite scores ###
+
+#bpm_att, bpm_ext, eqr_cog higher is better
+
+cor.test(data$erq_cog,data$erq_exp)
+
+
+standardized_A <- (data$erq_exp - mean(data$erq_exp, na.rm = T)) / sd(data$erq_exp,
+                                                                      na.rm = T)
+
+
+normalized_B <- (data$erq_exp - min(data$erq_exp, na.rm = T)) / (max(data$erq_exp, na.rm = T) - min(data$erq_exp, na.rm = T))
+
+
+quantile(normalized_B, probs = c(0.25, 0.75), na.rm = T)
+```
+
+### Analyzing timing and dosage variable on SR/Ext/SU 
+
+
+
+ETS on SR - include covariates?
+
+According to the cdc (https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5201377/),
+nonsmokers exposed to secondhand smoke have serum cotin
+
+
+
+
+
+### Aim 1
+Examine effects of SDP/ETS on adolescent self-regulation, substance use, 
+and externalizing. 
+
+
+
+For externalizing behaviors, first we analyzed the Brief Problem 
+Monitor questionnaire variables stratified by SDP, ETS, or
+Postpartum visit. These summary tables included both the responses for child on self and parent on child. It should be 
+expected that their responses match closely, however, the resulting tables show that children reported higher scoring and parents reported lower scoring.
+This shows a potential disconnect between parent and child. A possible next step would be to consider whether parental knowledge has any impact on these differences.
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+#summarizing child on self and parent on child answers
+
+data  %>% select(cig_ever, num_, bpm_ext,
+                 bpm_ext_p,  bpm_int, bpm_int_p, erq_cog, erq_exp,
+                 swan_hyperactive, swan_inattentive) %>%
+  tbl_summary(by = cumSDP, missing = "no",
+                     type = list (c(bpm_att, bpm_ext, bpm_int, 
+                 bpm_att_p, bpm_ext_p, bpm_int_p, erq_cog, erq_exp,
+                 swan_hyperactive, swan_inattentive) ~ "continuous2",
+                 c(cumSDP) ~ "categorical"),
+                     statistic = all_continuous() ~ c("{mean} ({sd})",
+                           "{N_miss} ({p_miss}%)"),
+              digits = list(c(bpm_att, bpm_ext, bpm_int, 
+                 bpm_att_p, bpm_ext_p, bpm_int_p, erq_cog, erq_exp,
+                 swan_hyperactive, swan_inattentive) ~ c(2, 2))) %>%
+  add_p(all_categorical () ~ "chisq.test") 
+
+
+
+
+#stratified by cum SDP
+data  %>% select(cumSDP, bpm_att, bpm_att_p, bpm_ext,
+                 bpm_ext_p,  bpm_int, bpm_int_p, erq_cog, erq_exp,
+                 swan_hyperactive, swan_inattentive) %>%
+  tbl_summary(by = cumSDP, missing = "no",
+                     type = list (c(bpm_att, bpm_ext, bpm_int, 
+                 bpm_att_p, bpm_ext_p, bpm_int_p, erq_cog, erq_exp,
+                 swan_hyperactive, swan_inattentive) ~ "continuous2",
+                 c(cumSDP) ~ "categorical"),
+                     statistic = all_continuous() ~ c("{mean} ({sd})",
+                           "{N_miss} ({p_miss}%)"),
+              digits = list(c(bpm_att, bpm_ext, bpm_int, 
+                 bpm_att_p, bpm_ext_p, bpm_int_p, erq_cog, erq_exp,
+                 swan_hyperactive, swan_inattentive) ~ c(2, 2))) %>%
+  add_p(all_categorical () ~ "chisq.test") 
+
+
+#stratified by smoking postpartum indicator avg score 
+data  %>% select(cumPP, bpm_att, bpm_att_p, bpm_ext,
+                 bpm_ext_p,  bpm_int, bpm_int_p) %>%
+  tbl_summary( by = cumPP,
+                     type = c(bpm_att, bpm_ext, bpm_int, 
+                 bpm_att_p, bpm_ext_p, bpm_int_p) ~ "continuous",
+                     statistic = all_continuous() ~ "{mean} ({sd})",
+            digits = list(c(bpm_att, bpm_ext, bpm_int, 
+                 bpm_att_p, bpm_ext_p, bpm_int_p) ~ c(2, 2)))%>%
+  add_p(pvalue_fun = ~ style_pvalue(.x, digits = 2))
+
+
+
+data  %>% select(smoke_exposure_6mo, bpm_att, bpm_att_p, bpm_ext,
+                 bpm_ext_p,  bpm_int, bpm_int_p) %>%
+  tbl_summary( by = smoke_exposure_6mo,
+                     type = c(bpm_att, bpm_ext, bpm_int, 
+                 bpm_att_p, bpm_ext_p, bpm_int_p) ~ "continuous",
+                     statistic = all_continuous() ~ "{mean} ({sd})",
+            digits = list(c(bpm_att, bpm_ext, bpm_int, 
+                 bpm_att_p, bpm_ext_p, bpm_int_p) ~ c(2, 2)))%>%
+  add_p(pvalue_fun = ~ style_pvalue(.x, digits = 2))
+
+
+data  %>% select(smoke_exposure_12mo, bpm_att, bpm_att_p, bpm_ext,
+                 bpm_ext_p,  bpm_int, bpm_int_p) %>%
+  tbl_summary( by = smoke_exposure_12mo,
+                     type = c(bpm_att, bpm_ext, bpm_int, 
+                 bpm_att_p, bpm_ext_p, bpm_int_p) ~ "continuous",
+                     statistic = all_continuous() ~ "{mean} ({sd})",
+            digits = list(c(bpm_att, bpm_ext, bpm_int, 
+                 bpm_att_p, bpm_ext_p, bpm_int_p) ~ c(2, 2)))%>%
+  add_p(pvalue_fun = ~ style_pvalue(.x, digits = 2))
+
+#stratified by ETS avg score
+data  %>% select(avgETS, bpm_att, bpm_att_p, bpm_ext,
+                 bpm_ext_p,  bpm_int, bpm_int_p) %>%
+  tbl_summary(by = avgETS, missing_text = "Missing",
+                     type = c(bpm_att, bpm_ext, bpm_int, 
+                 bpm_att_p, bpm_ext_p, bpm_int_p) ~ "continuous",
+                     statistic = all_continuous() ~ "{mean} ({sd})",
+              digits = list(c(bpm_att, bpm_ext, bpm_int, 
+                 bpm_att_p, bpm_ext_p, bpm_int_p) ~ c(2, 2)))%>%
+  add_p(pvalue_fun = ~ style_pvalue(.x, digits = 2))
+
+
+```
+
+
+
+
+For this aim, we also summarize reported substance use stratified by cumulative SDP,
+and average postpartum smoking and smoke exposure.
+
+```{r}
+#substance use
+```
+
+
+Also, 
+
+
+
+
+
+
+```{r}
+
+#KEEP 
+
+#stratified by ETS
+data  %>% select(cumSDP, cig_ever, num_cigs_30, e_cig_ever, num_e_cigs_30, alc_ever,
+                 num_alc_30, mj_ever, num_mj_30) %>%
+  tbl_summary(by = cumSDP, 
+                     type = c(num_cigs_30, num_e_cigs_30, num_alc_30,
+                              num_mj_30) ~ "continuous",
+                     statistic = all_continuous() ~ "{mean} ({sd})",
+                         #all_continuous() ~ "{mean} ({sd})",
+              digits = list(c(num_cigs_30, num_e_cigs_30, num_alc_30,
+                              num_mj_30) ~ c(2, 2))) %>%
+  add_p()
+
+
+
+
+```
+
+
+Aim 2 asks us to explore links between self-regulation at baseline and substance and 
+externalizing at 6- and 12-month follow-ups. Since the data we have only includes 
+baseline measure, we can summarize the overall baseline characteristics for substance and
+self-regulation/ externalizing. Additionally, we can summarize these characteristics
+based on the created cumulative SDP.
+
+
+
+### AIM 3:
+
+Identify self-regulation problems that mediate the link between SDP/ETS exposure
+and level of, and change in, SU and EXT severity over time. 
+
+
+In creating a prenatal exposure severity variable, the cumulative SDP and
+prenatal cotimean_34wk will be considered. 
+
+In creating a postnatal exposure severity variable, the ETS and mother cotinine at 6 months postpartum will be considered.
+
+```{r}
+
+```
+
+
+Additionally, we draw a summary of mother cotinine and baby cotinine at 6 months postpartum. 
+
+
+```{r}
+
+```
+
+
+### Initial Regression
+
+Controlling for postnatal exposure
+
+```{r}
+#fit new model using cumulative count with alcohol use 
+
+#model_cum_smoke_alc<- glm(alc_ever ~ cum_smoke_preg, data = new_df, family = binomial(link = "logit"))
+#summary(model_cum_smoke_alc)
+
+#create plot showing the probability predictions 
+#new_cum_data <- data.frame(cum_smoke_preg = new_df$cum_smoke_preg)
+
+# Predict probabilities using the model
+#new_cum_data$Predicted_Probabilities<- predict(model_cum_smoke_alc, newdata = new_cum_data, type = "response")
+
+
+# Create a plot for baseline and alcohol use predictions
+#ggplot(data = new_cum_data, aes(x = cum_smoke_preg, y = Predicted_Probabilities)) +
+ # geom_line() +
+  #labs(
+   # x = "Maternal Smoking Status Cumulative",
+    #y = "Predicted Probabilities of Child Alcohol Use",
+  #  title = "Logistic Regression Predicted Probabilities"
+#  )
+```
+
+
+
+\newpage
+
+## Code Appendix:
+
+```{r get-labels, echo=FALSE}
+labs = knitr::all_labels()
+labs = setdiff(labs, c("get-labels"))
+```
+
+```{r all-code, ref.label=labs, echo=TRUE, eval=FALSE}
+```
+
+
