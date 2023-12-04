@@ -17,4 +17,4 @@ This project focuses on a dataset that includes baseline and demographic charact
 # Project 3
 In this project, the performance of a predictive model developed in a source population was evaluated when applied to a new target population. This transportability analysis was evaluated through a MC simulation using data generated separately for men and women to create a target population. A target population was simulated by first generating
 the continuous variables using the mvrnorm function from the
-mvtnorm package in R. The simulation involved 1,000 repetitions, and for each repetition the brier score using an inverse-odds weighting estimator was calculated. A list of required packages are included in the proj3copy.RMD
+mvtnorm package in R. The simulation involved 1,000 repetitions, and for each repetition the brier score using an inverse-odds weighting estimator was calculated. A list of required packages and references to formulas for calculating these estimates are included in the proj3copy.RMD
