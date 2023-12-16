@@ -10,7 +10,7 @@ In a short overview of the results, adolescent outcomes tended to be worse in te
 
 
 For this project see the following files: 
-- *pda_project.R* file provided by the instructor merged study data of both parent and child into a new dataset containing parent ID as a unique identifier.
+- The *pda_project.R* file provided by the instructor merged study data of both parent and child into a new dataset containing parent ID as a unique identifier.
 - An exploratory data analysis was conducted in the *Project_1_as.rmd* file. See corresponding pdf file for easy viewing.
 - For data privacy purposes, the dataset was not included in the repository.
   
