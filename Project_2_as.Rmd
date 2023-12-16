@@ -1,0 +1,619 @@
+---
+title: Developing Prediction Models for Tracheostomy in Infants with Severe Bronchopulmonary
+  Dysplasia
+author: "Alitzel Serrano Laguna"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      message = FALSE,
+                      warning = FALSE)
+
+```
+
+
+
+
+```{r}
+#Load Needed Libraries
+library(mice)
+library(naniar)
+library(tidyverse)
+library(gtsummary)
+library(gridExtra)
+library(tableone)
+library(lme4)
+library(ggplot2)
+library(glmnet)
+require(lattice)
+require(pan)
+library(tableone)
+library(leaps)
+library(knitr)
+library(kableExtra)
+library(pROC)
+
+```
+
+
+## Abstract
+
+The focus of this project was on developing prediction model for tracheostomy in infants with Severe Bronchopulmonary Dysplasia (SBD). The analysis focused on respiratory support information, specifically at 36 weeks postmenstrual age (PMA), utilizing a comprehensive dataset encompassing baseline and demographic characteristics, along with respiratory support details at 36 weeks. This analysis involved fitting three tracheostomy outcome prediction models, employing different variable selection methods, including a five-fold cross-validation and backward model selection procedures. Results revealed that the lasso model with two-way interactions consistently outperformed other models, demonstrating superior predictive accuracy. Notably, non-zero coefficients in the lasso two-way model highlighted interactions between center and other covariates, emphasizing the impact of center-specific differences on outcomes. Moving forward, considering a mixed-effects or multilevel model to account for center variations is needed. Key covariates influencing tracheostomy outcomes included ventilation support levels, peak oxygen levels, maternal race, and severity. Weight at 36 weeks and ventilation support level emerged as crucial interactions in predicting tracheostomy need. These findings underscore potential variables of interest that should be further investigated in predicting the need for tracheostomy in infants.
+
+## Introduction
+
+According to Higgins et al., bronchopulmonary dysplasia (BPD) remains a critical concern in neonatal health. BPD is characterized by abnormal development of lung tissue which primarily affects preterm infants, posing significant challenges in respiratory function. Infants born prematurely frequently require extensive medical intervention, including mechanical ventilation and oxygen therapy. Hence, it is imperative for physicians to monitor the health trajectories of preterm infants to ensure they are receiving adequate care. In cases where an infant develops BPD, it is important know whether their condition evolves to the point of needing a tracheostomy. Receiving a tracheostomy in a timely manner can prevent worsening conditions and potentially avoid infant death. It is essential to understand the gravity of BPD on infants born at or before 32 weeks postmenstrual age (PMA). In this project, our analysis pertains to respiratory support information at critical time points, particularly at 36 weeks PMA, a crucial milestones in the neonatal development.
+
+## Data Overview 
+
+### Pre-processing
+
+Data for this project comes from the (BPD) Collaborative Registry which contains multicenter interdisciplinary BPD programs located in the United States and Sweden. The dataset includes information only from U.S. centers. The data includes baseline and demographic characteristics in addition to respiratory support information at 36 and 44 weeks PMA for infants born at or earlier than 32 weeks postmenstrual age (PMA) who are at higher risk for BPD. Severity of BPD categories (I, II, III) at week 36 PMA were coded using the NHLBI(2018) definition. This is a revised definition of the 2001 NHLBI
+guidelines. In this definition, cutoff points for invasive intermittent positive pressure (IPPV), noninvasive positive pressure ventilation (NIPPV), and other oxygen levels are established for each category [1]. Additionally, duplicate IDs were removed from the dataset.
+
+### Missing Data
+
+Table 1 summarizes missing data for covariates with greater than 10% missingness. From this table, it is observed that respiratory covariate measures at week 44 have more than 40% missingness. This can be due to the infants being discharged early, observing an outcome, or being transferred to another center. Additionally, Table 2 summarizes the mean percentage of missing data for participants with greater than 30% missing data, grouped by center and trach outcome. Only centers 1,2,4,7,and 12 had at least 7 participants with more than 30% missing data. We also observe that one infant is missing data from which center they received care. Infants who received a tracheostomy also tended to have a larger percentage of missing data. In going forward with the analysis, we only consider data for week 36, based on the patterns described previously, this data appears to be missing at random, and thus imputation can be considered. 
+
+### Population Characteristics 
+
+Table 3 summarizes the overall population characteristics and also stratifies by tracheostomy outcome. The dataset includes a total of 996 infants, 58.9% being male, 14.7% receiving a tracheostomy, and 5.4% having died. This data was collected across ten different centers. In stratifying by tracheostomy outcome, we observe n = 146 infants had a tracheostomy. There are also statistically significant differences between infants who had and did not have a tracheostomy. Infants who received a tracheostomy, had a significantly lower mean weight at birth and 36 weeks but not at 44 weeks compared to infants who did not receive a tracheostomy. Infants who received a tracheostomy also had higher values for fraction of inspired oxygen, peak inspiratory pressure(cmH2O), and positive and exploratory pressure (cm H2O) at weeks 36 and 44. Their mean gestational age of hospital discharge is 79.94 compared to 48.92 for infants who did not receive a tracheostomy. The outcome of interest is limited to a tracheostomy according to 2001 NHLBI
+guidelines which accounts for death as an outcome of interest under certain cisrcumstances. In not having available information for cause of death, this outcome was excluded.
+
+Moreover, in Table 4, we observe differences across centers, with centers 1, 2, and 12 having the highest number of infants who received a tracheostomy. The majority of infants (n = 630) are from center 2. Additionally from Table 3, we observed differences among infants who did and did not receive a tracheostomy for ventilation support and pulmonary hypertension at both weeks 36 and 44. In Table 4, stratified by centers, we observe that center 21 only has data for one infant (removed from the table due to NA values), center 20 only has data for four infants (removed due to small number of observations for center), and center 4 has completely missing data for week 44 measurements. 
+
+In addition, correlations between variables of interest are explored Particularly, many baseline covariates
+such as birth length, birth weight, head circumference, and gestational age tend to be positively and strongly correlated.This is expected as preterm infants do not have the time to fully develop in utero.
+
+
+```{r}
+#########################################################
+# Data Pre-processing
+#########################################################
+
+trach_data <- read.csv("~/Project2/project2.csv")
+
+#delete duplicate ids
+#which(trach_data$record_id == 2000824)
+trach_data <- trach_data[-c(790,791,792),]
+
+#change numeric to factors
+trach_data[,c(2:4,9:15,17,21,23,27, 29:30)] <- lapply(trach_data[,c(2:4,9:15,17,21,23,27,29:30)], factor)
+
+#Create severity of BPD variable indicator at week 36 
+trach_data <- trach_data %>% mutate(severity.36 = case_when(
+  (ventilation_support_level.36 == 0 | 
+     (ventilation_support_level.36 == 1  & inspired_oxygen.36 < 0.22)) ~ 'mild', 
+  ((ventilation_support_level.36 == 2 & inspired_oxygen.36 <= 0.21) | 
+     (ventilation_support_level.36 == 1 & inspired_oxygen.36 < 0.30 & inspired_oxygen.36 >= 0.22)) ~ 'moderate',
+   ((ventilation_support_level.36 == 2 & inspired_oxygen.36 > 0.21) |
+      (ventilation_support_level.36 == 1 & inspired_oxygen.36 >= 0.30)) ~ 'severe'))
+
+
+
+# which(is.na(trach_data$severity))
+# sum(is.na(trach_data$severity))
+# trach_data %>% group_by(severity, Trach) %>% summarize(n())
+```
+
+
+```{r, out.width='80%', out.height='80%'}
+#########################################################
+# Explore Missingness 
+#########################################################
+
+#...by variable
+miss_var <- as.data.frame(miss_var_summary(trach_data)) 
+miss_var$pct_miss <- round(miss_var$pct_miss, 2)
+Tab1 <- miss_var[miss_var$pct_miss > 10,] %>% 
+  knitr::kable(caption = "Summary of Missing Data by Variable",
+                                                    col.names = c("Variable",  "Count",
+                                                                  "Percentage")) %>%
+  kable_styling(full_width = F)
+Tab1
+```
+
+
+
+```{r, out.width='80%', out.height='80%'}
+#summarize missingness by row
+pct_na_r <- round(rowSums(is.na(trach_data)) / ncol(trach_data) * 100,2)
+row_na <- data.frame(patient_id = trach_data$record_id, pct_na = pct_na_r, Center = trach_data$center, Trach = trach_data$Trach)
+
+row_na <- row_na[row_na$pct_na > 30,]  # participants w/ greater than % missing
+df <- row_na %>% group_by(Center, Trach) %>% summarize(Median = round(mean(pct_na),2), SD = round(sd(pct_na),2), n = n()) 
+
+Tab2<- knitr::kable(df, caption = "Infants with greater than 30 percent missing data",
+      col.names = c("Center", "Trach", "Mean Percentage", "Std. Dev.","n")) %>% 
+  kable_styling(full_width = F)
+Tab2
+```
+
+
+```{r, out.width='80%', out.height='80%'}
+#########################################################
+# Summary Statistics 
+#########################################################
+
+#create summary table overall by trach
+subset <- trach_data %>% filter(center != "21" & center != "20") %>% dplyr::select(!c("record_id"))
+names(subset) <- c("center", "Maternal Race", "Maternal Ethnicity", "Birth weight (g)","Gestational Age", "Birth Length (cm)", "birth_hc", "del_method",      "prenat_ster", "com_prenat_ster" , "mat_chorio", "Gender", "sga", "any_surf",   "weight_today.36", "ventilation_support_level.36","inspired_oxygen.36","p_delta.36","peep_cm_h2o_modified.36", "med_ph.36", "weight_today.44", "ventilation_support_level_modified.44", "inspired_oxygen.44" , "p_delta.44" ,   "peep_cm_h2o_modified.44" ,"med_ph.44","hosp_dc_ga" ,"Trach", "Death" , "severity.36")
+subset$center <- factor(subset$center )
+
+vars <- c("center", "Maternal Race", "Maternal Ethnicity", "Birth weight (g)","Gestational Age", "Birth Length (cm)", "birth_hc", "del_method","prenat_ster", "com_prenat_ster" , "mat_chorio", "Gender", "sga", "any_surf", "weight_today.36", "ventilation_support_level.36",  "inspired_oxygen.36","p_delta.36",            "peep_cm_h2o_modified.36", "med_ph.36", "weight_today.44", "ventilation_support_level_modified.44", "inspired_oxygen.44" , "p_delta.44" , "peep_cm_h2o_modified.44" ,"med_ph.44","hosp_dc_ga" ,"Trach","Death","severity.36")
+
+#subset$center <- as.numeric(subset$center)
+#subset <- subset %>% filter(center != 10)
+tab3 <- CreateTableOne(data = subset, vars = vars, strata = "Trach", addOverall = T)
+names(tab3$ContTable) <- c("Overall", "No Trach", "Trach")
+names(tab3$CatTable) <- c("Overall", "No Trach", "Trach")
+tab3%>% kableone( booktabs=TRUE, caption = "Population Characteristics Stratified by Tracheostomy Outcome") 
+
+```
+
+```{r}
+#create summary table stratified by center
+subset <- subset %>% filter(center != "21" & center != "20") 
+subset$center <- factor(subset$center )
+
+vars = c("Maternal Race", "Meternal Ethnicity" , "Birth weight (g)", "Gestational Age", "Birth Length (cm)", "birth_hc" ,   "del_method" ,"prenat_ster",  "com_prenat_ster"                      
+, "mat_chorio", "Gender","sga",  "any_surf", "weight_today.36",  "ventilation_support_level.36" ,"inspired_oxygen.36",  "p_delta.36", "peep_cm_h2o_modified.36", "med_ph.36", "weight_today.44",  "ventilation_support_level_modified.44"
+, "inspired_oxygen.44",  "p_delta.44","peep_cm_h2o_modified.44", "med_ph.44","hosp_dc_ga","Trach","Death","severity.36" )
+
+Tab4 <- CreateTableOne(data = subset, vars = vars, strata = c("center"))
+#kableone(tab3)
+
+outfinish4 <- kableone(Tab4 , align = 'c' , booktabs=TRUE, caption = "Population Characterstics Stratified by Center") %>% kable_styling(latex_options = c("scale_down"), full_width = F)
+
+outfinish4
+```
+
+
+
+
+```{r}
+library(corrplot)
+example <- trach_data %>% select_if(is.numeric) %>% 
+                            dplyr::select(!c(weight_today.44, inspired_oxygen.44, p_delta.44,
+                                      peep_cm_h2o_modified.44))
+
+example <- na.omit(example)
+
+correlation_matrix <- cor(example)
+
+par(mar = c(1, 1, 3, 1))
+corrplot(
+  correlation_matrix,
+  method = "color",
+  addrect = 2,
+  order = "hclust",
+  type = "upper",
+  number.cex = 0.7,
+  tl.cex = 0.7, tl.col = "black",
+  addCoef.col = "black",
+  diag = FALSE,
+  title = "Correlations Among Covariates",  mar=c(1,1,2,1)
+)
+```
+
+# Model Validation, Derivation, and Selection 
+All statistical analyses were performed using R Version 4.3.1. Using the mice package in R, 5 imputed train and test datasets were generated with a 70-30 train-test split. The models were fit on the training data and validated on the test data. A total of three models were developed from the available predictor variables to predict whether an infant will undergo a tracheostomy. Model 1 and model 2 were both lasso models derived using a 5-fold cross-validation selection procedure. Model 1 included only main intactions, while Model 2 was allowed to include potential two-way interactions. The glmnet package in R was used to fit both lasso models. Lastly, model 3 was a logistic regression model derived using a backward model selection procedure included only the main effects of potential variables. The lasso models were chosen to be fit to the data since these models apply shrinkage to coefficients through their tuning parameter. In this context, it was important to select variables with strong associations to the outcome of interest, hence a lasso model would incorporate this in its selection process. For the logistic model, a backward selection procedure was chosen, since this process begins with including all possible variables and iteratively removing variables based on AIC criteria.
+
+```{r}
+#################################
+# Impute data: train and test
+#################################
+
+set.seed(22112) # for reproducibility
+
+#exclude centers with potential influence
+trach_data <- trach_data %>% filter(center != "21" & center != "20") 
+trach_data$center <- factor(trach_data$center )
+
+ignore <- sample(c(TRUE, FALSE), size = nrow(trach_data), replace = TRUE, prob = c(0.3, 0.7))
+
+# Train and test in separate datasets
+trach_dat <- trach_data %>% 
+ dplyr::select(!c(severity.36, weight_today.44, ventilation_support_level_modified.44,
+                                     inspired_oxygen.44, p_delta.44,peep_cm_h2o_modified.44,
+                                     med_ph.44)) #remove from imputation
+
+traindata <- trach_dat[!ignore, ]
+testdata <- trach_dat[ignore, ]
+#excluded from imp
+traindata_excl <- trach_data[!ignore, ]
+testdata_excl <- trach_data[ignore, ]
+#conduct imputation
+imp.train <- mice(traindata, m = 5, maxit = 5, print = FALSE, seed = 22112)
+imp.test2 <- mice.mids(imp.train, newdata = testdata, print = F)
+
+trainingdata <- list()
+validationdata <- list()
+
+#Add excluded variables
+for(i in 1:5)
+{
+  
+   trainingdata[[i]] <- complete(imp.train, i)
+ 
+  #code severity variable
+  trainingdata[[i]] <- trainingdata[[i]] %>% mutate(severity.36 = case_when(
+   (ventilation_support_level.36 == 0 |
+      (ventilation_support_level.36 == 1  & inspired_oxygen.36 < 0.22)) ~ 'mild',
+   ((ventilation_support_level.36 == 2 & inspired_oxygen.36 <= 0.21) |
+      (ventilation_support_level.36 == 1 & inspired_oxygen.36 < 0.30 & inspired_oxygen.36 >= 0.22)) ~ 'moderate',
+    ((ventilation_support_level.36 == 2 & inspired_oxygen.36 > 0.21) |
+       (ventilation_support_level.36 == 1 & inspired_oxygen.36 >= 0.30)) ~ 'severe'))
+  trainingdata[[i]]$severity.36 <- as.factor(trainingdata[[i]]$severity.36)
+  
+  testdata[[i]] <- complete(imp.test2, i)
+  
+  #code severity variable
+  testdata[[i]] <- testdata[[i]] %>% mutate(severity.36 = case_when(
+   (ventilation_support_level.36 == 0 |
+      (ventilation_support_level.36 == 1  & inspired_oxygen.36 < 0.22)) ~ 'mild',
+   ((ventilation_support_level.36 == 2 & inspired_oxygen.36 <= 0.21) |
+      (ventilation_support_level.36 == 1 & inspired_oxygen.36 < 0.30 & inspired_oxygen.36 >= 0.22)) ~ 'moderate',
+    ((ventilation_support_level.36 == 2 & inspired_oxygen.36 > 0.21) |
+       (ventilation_support_level.36 == 1 & inspired_oxygen.36 >= 0.30)) ~ 'severe'))
+ testdata[[i]]$severity.36 <- as.factor(testdata[[i]]$severity.36)
+
+}
+
+#which(is.na(trainingdata[[1]]$severity.36))
+#sum(is.na(testdata[[1]]$severity.36))
+
+```
+
+
+
+```{r}
+###########################
+# LASSO
+###########################
+
+fit_lasso <- function(train) { 
+  #' Runs 10-fold CV for one-way and two-way lasso and returns corresponding coefficients 
+  #' @param train, data set
+  #' @return lasso_models, returns a list of models and coefficients for minimum cv error
+
+  #grid range for lambda
+  grid <- 10^ seq (10 , -2, length = 100)
+  train <- train %>% dplyr::select(!c(Death, record_id)) #remove death
+
+  # Matrix form for ordered variables
+  #including two-way interactions
+  x.ord2 <- model.matrix(Trach~.^2, data = train)[,-c(22)] #remove trach 
+  #only single terms
+  x.ord <- model.matrix(Trach~., data = train)[,-c(22)] 
+  y.ord <- as.numeric(train$Trach)
+  y.ord <- ifelse(y.ord == 2, 1, 0)
+  
+  # Generate folds
+  k <- 10 
+  set.seed(1) # consistent seeds between imputed data sets
+  folds <- sample(1:k, nrow(train), replace=TRUE)
+  
+  # Lasso model without interactions
+  lasso_mod_cv <- cv.glmnet(x.ord, y.ord, nfolds = 10, foldid = folds, alpha = 1, lambda = grid, family = "binomial") 
+  bestlam <- lasso_mod_cv$lambda.min
+  lasso_mod1 <- glmnet(x.ord, y.ord, nfolds = 10, foldid = folds,alpha = 1, lambda = bestlam, family = "binomial")
+  
+  # Lasso model with interactions
+  lasso_mod_cv2 <- cv.glmnet(x.ord2, y.ord, nfolds = 10, foldid = folds, alpha = 1, lambda = grid, family = "binomial") 
+  
+  bestlam2 <- lasso_mod_cv2$lambda.min
+  
+  lasso_mod2 <- glmnet(x.ord2, y.ord, nfolds = 10, foldid = folds,  alpha = 1, lambda = bestlam2, family = "binomial")
+  
+  # Get coefficients 
+  coef1 <- coef(lasso_mod1)
+  coef2 <- coef(lasso_mod2) 
+  
+  #return best model and its coefficients
+  lasso_models <- list()
+  lasso_models <- list(coef1, coef2, lasso_mod1, lasso_mod2)
+   
+  return(lasso_models) 
+} 
+
+# trainingdata[[1]]%>% dplyr::select(!c(Death, record_id)) 
+
+# Find average lasso coefficients over imputed datasets
+lasso_coef1 <-  fit_lasso(trainingdata[[1]]) 
+lasso_coef2 <-  fit_lasso(trainingdata[[2]])
+lasso_coef3 <-  fit_lasso(trainingdata[[3]]) 
+lasso_coef4 <-  fit_lasso(trainingdata[[4]])
+lasso_coef5 <-  fit_lasso(trainingdata[[5]])
+
+lasso_coef_all_1 <- cbind(lasso_coef1[[1]], lasso_coef2[[1]], lasso_coef3[[1]],lasso_coef4[[1]], lasso_coef5[[1]]) 
+
+lasso_coef_all_2 <- cbind(lasso_coef1[[2]], lasso_coef2[[2]], lasso_coef3[[2]],lasso_coef4[[2]], lasso_coef5[[2]]) 
+
+#for the model with  main interactions
+avg_coefs_lasso1 <- apply(lasso_coef_all_1, 1, mean)
+var_coefs_lasso1 <- apply(lasso_coef_all_1, 1, var)
+#for the model with two-way interactions
+avg_coefs_lasso2 <- apply(lasso_coef_all_2, 1, mean)
+var_coefs_lasso2 <- apply(lasso_coef_all_2, 1, var)
+ 
+# Find predicted probabilities on long imputed test data (no rounding applied in this case!)
+trach_df_long <- complete(imp.test2,action="long")
+subset_long <- trach_df_long %>% dplyr::select(!c(.imp, .id,record_id,Death))
+subset_long <- subset_long %>% mutate(severity.36 = case_when(
+   (ventilation_support_level.36 == 0 |
+      (ventilation_support_level.36 == 1  & inspired_oxygen.36 < 0.22)) ~ 'mild',
+   ((ventilation_support_level.36 == 2 & inspired_oxygen.36 <= 0.21) |
+      (ventilation_support_level.36 == 1 & inspired_oxygen.36 < 0.30 & inspired_oxygen.36 >= 0.22)) ~ 'moderate',
+    ((ventilation_support_level.36 == 2 & inspired_oxygen.36 > 0.21) |
+       (ventilation_support_level.36 == 1 & inspired_oxygen.36 >= 0.30)) ~ 'severe'))
+
+subset_long$severity.36 <- as.factor(subset_long$severity)
+
+#for one way interactions
+x_vars <- model.matrix(Trach~. , subset_long)
+subset_long$score_lasso1 <- x_vars %*% (avg_coefs_lasso1)
+mod_lasso1 <- glm(Trach~score_lasso1, data = subset_long, family = "binomial")
+predict_probs_lasso1 <- predict(mod_lasso1, type="response")
+
+#for two way interactions
+x_vars2 <- model.matrix(Trach~(.)^2 , subset_long %>%dplyr::select(!c(score_lasso1)))
+subset_long$score_lasso2 <- x_vars2 %*% (avg_coefs_lasso2)
+mod_lasso2 <- glm(Trach~score_lasso2, data = subset_long, family = "binomial")
+predict_probs_lasso2 <- predict(mod_lasso2, type="response")
+
+
+#Discrimination - ROC and AUC
+roc_mod_lasso1 <- pROC::roc(predictor=predict_probs_lasso1, 
+                response=as.factor(mod_lasso1$y), levels = c(0,1), direction = "<")
+#plot(main = "Lasso Model One-Way", roc_mod_lasso1, print.auc = T, print.thres = T)
+roc_mod_lasso2  <- pROC::roc(predictor=predict_probs_lasso2, 
+                response=as.factor(mod_lasso2$y))
+#plot(main = "Lasso Model Two-Way", roc_mod_lasso2, print.auc = T, print.thres = T)
+
+roc_vals_lasso1 <- pROC::coords(roc=roc_mod_lasso1, x = "best")
+roc_vals_lasso2 <- pROC::coords(roc=roc_mod_lasso2, x = "best")
+
+
+#comparison of values
+get_vals <- function(pred_probs, thresh, y)
+{
+pred_ys <- ifelse(pred_probs > thresh, 1, 0)
+pred_ys <- factor(pred_ys, levels = c("0", "1"))
+tab_outcome <- table(mod_lasso1$y, pred_ys)
+tab_outcome
+#sens <- tab_outcome[2,2]/(tab_outcome[2,1]+tab_outcome[2,2])
+#spec <- tab_outcome[1,1]/(tab_outcome[1,1]+tab_outcome[1,2])
+ppv <- tab_outcome[2,2]/(tab_outcome[1,2]+tab_outcome[2,2])
+npv <- tab_outcome[1,1]/(tab_outcome[1,1]+tab_outcome[2,1])
+acc <- (tab_outcome[1,1]+tab_outcome[2,2])/sum(tab_outcome)
+vals <- data.frame(Measures = c("PPV", "NPV", "Acc"),
+           Values = round(c(ppv, npv, acc),3))
+
+return(vals)
+}
+
+
+vals_lasso1 <- get_vals(predict_probs_lasso1,roc_vals_lasso1$threshold,mod_lasso1$y)
+vals_lasso2 <- get_vals(predict_probs_lasso2,roc_vals_lasso2$threshold,mod_lasso2$y)
+
+```
+
+
+
+```{r}
+
+logistic_backward <- function(train)
+ {
+   #' Fits logistic model and returns corresponding coefficients 
+   #' @param train, data set
+   #' @return dat, a list containing the fitted model and its coefficients
+
+ train <- train %>% dplyr::select(!c(Death, record_id)) #remove death and id
+
+   # Matrix form for ordered variables
+  #including two-way interactions
+  x.ord2 <- model.matrix(Trach~.^2, data = train)[,-c(22)] #remove trach
+  #only single terms
+  x.ord <- model.matrix(Trach~., data = train)[,-c(22)]
+  y.ord <- train$Trach
+
+  log_modfull <- glm(y.ord ~ x.ord, family = "binomial")
+   log_modnull <- glm(y.ord ~ 1, family = "binomial")
+
+backwardstep <- step(log_modfull, scope = formula(log_modnull), direction='backward', trace = 0)
+coef <- coef(backwardstep)
+
+dat <- list(coef, backwardstep)
+return(dat)
+
+}
+
+logisticb1 <- logistic_backward(trainingdata[[1]]) 
+logisticb2 <- logistic_backward(trainingdata[[2]]) 
+logisticb3 <- logistic_backward(trainingdata[[3]]) 
+logisticb4 <- logistic_backward(trainingdata[[4]]) 
+logisticb5 <- logistic_backward(trainingdata[[5]])
+ 
+logistic_b_coef <- cbind(logisticb1[[1]], logisticb2[[1]], logisticb3[[1]],logisticb4[[1]],logisticb5[[1]]) 
+#' logistic_coef[is.na(logistic_coef)] <- 0
+#for the model with  main interactions
+avg_coefs_backward <- apply(logistic_b_coef, 1, mean)
+var_coefs_backward <- apply(logistic_b_coef, 1, var)
+
+#for one way interactions
+x_vars <- model.matrix(Trach~. , subset_long %>% dplyr::select(!c(score_lasso1, score_lasso2)))
+x_vars[2] <- 0 
+avg_coefs_backward[2] <- 0 #x.ord intercept
+subset_long$score_bwd <- x_vars %*% (avg_coefs_backward)
+mod_logistic_bwd <- glm(Trach~score_bwd, data = subset_long, family = "binomial")
+predict_probs_bwd <- predict(mod_logistic_bwd, type="response")
+
+#Discrimination - ROC and AUC
+roc_mod_backward <- pROC::roc(predictor=predict_probs_bwd, 
+                response=as.factor(mod_logistic_bwd$y), levels = c(0,1), direction = "<")
+#plot(main = "Backward Model",roc_mod_backward, print.auc = T, print.thres = T)
+roc_vals_backward <- pROC::coords(roc=roc_mod_backward, x = "best")
+
+#comparison of values
+vals_backward<- get_vals(predict_probs_bwd,roc_vals_backward$threshold, mod_logistic_bwd$y)
+
+```
+
+
+```{r}
+
+df <- data.frame(
+  Metric = c("Sensitivity", "Specificity", "AUC", "Best Threshold"),
+  Lasso1 = c(
+    roc_vals_lasso1$sensitivity,
+    roc_vals_lasso1$specificity,
+    auc(roc_mod_lasso1),
+    roc_vals_lasso1$threshold
+  ),
+   Lasso2 = c(
+    roc_vals_lasso2$sensitivity,
+    roc_vals_lasso2$specificity,
+    auc(roc_mod_lasso2),
+    roc_vals_lasso2$threshold
+  ),
+   Backward = c(
+    roc_vals_backward$sensitivity,
+    roc_vals_backward$specificity,
+    auc(roc_mod_backward),
+    roc_vals_backward$threshold
+  )
+)
+
+df %>% knitr::kable(caption = "Performance Metrics for Models", digits = 4)
+```
+
+
+
+```{r}
+
+#Table of coefficients 
+lass1 <- avg_coefs_lasso1  #[avg_coefs_lasso1 != 0.00]
+lass2 <- avg_coefs_lasso2[1:length(lass1)] #[avg_coefs_lasso2 != 0.00]
+bwd <- avg_coefs_backward
+
+coef_df <- cbind(lass01 = round(lass1,4),lass02 = round(lass2,4), Backward = round(bwd,4))
+
+df <- as.data.frame(coef_df)
+
+df2 <- df %>%
+  summarise_all(~sum(. == 0))
+
+Tab10 <- df2 %>%
+  knitr::kable(col.names = c("Lasso", "Lasso2", "Backward"), booktabs = T, caption = "Zero Coefficients for Models") %>%
+   kable_styling(latex_options = c("striped"),full_width = F)
+Tab10
+
+
+#closeness of values
+threshold = 0.02
+
+close_counts <- combn(names(df), 2, function(cols) {
+  sum(abs(df[[cols[1]]] - df[[cols[2]]]) < threshold)
+}, simplify = TRUE)
+
+# Summarize the total count of close values for each pair of columns
+summary_result <- data.frame(
+  Column_Pair = combn(names(df), 2, paste, collapse = "_vs_"),
+  Close_Count = close_counts
+)
+Tab8 <- summary_result %>% knitr::kable(col.names = c("Column Pair", "Close Count"), booktabs = T, caption = "Close Coefficients") %>% kable_styling(latex_options = c("striped"),full_width = F)
+Tab8
+```
+
+
+
+```{r}
+#Tables for model comparison
+values <- cbind(Measure = c("PPV", "NPV", "Acc"), Lasso = vals_lasso1[,2], Lasso_int= vals_lasso2[,2], 
+                Backward = vals_backward[,2])
+
+tab4 <- as.data.frame(values)
+
+
+Tab4 <- knitr::kable(tab4, caption = "Metrics by Model", col.names = c("Measure",  "Lasso one-way interactions only", "Lasso two-way interactions", "Backward")) %>%
+  kable_styling(latex_options = c("striped"),full_width = F)
+#Tab4
+
+
+tab <- rbind(roc_vals_lasso1, roc_vals_lasso2, roc_vals_backward)
+Models <- c("Lasso one-way interactions only", "Lasso two-way interactions","Backward")
+
+
+
+tab5 <- cbind(Models, tab)
+
+Tab5 <- knitr::kable(tab5, caption = "Metrics by Model", col.names = c("Models", "Threshold","Specificity", "Sensitivity" )) %>%
+   kable_styling(latex_options = c("striped"),full_width = F)
+ #Tab5
+
+
+```
+
+
+```{r}
+
+#TABLES OF COEFFICIENTS
+
+lass1 <- avg_coefs_lasso1  
+lass2 <- avg_coefs_lasso2[1:32]
+bwd <- avg_coefs_backward
+
+# Assuming lass1, lass2, and bwd are your coefficient vectors
+# with potentially different lengths
+
+# Combine coefficients into a data frame
+coefficients_df <- data.frame(
+  Lasso1 = c(lass1, rep(NA, max(length(lass1), length(lass2), length(bwd)) - length(lass1))),
+  Lasso2 = c(lass2, rep(NA, max(length(lass1), length(lass2), length(bwd)) - length(lass2))),
+  Backward = c(bwd, rep(NA, max(length(lass1), length(lass2), length(bwd)) - length(bwd)))
+)
+
+coefficients_df <- round(coefficients_df[1:length(bwd),],3)
+
+coefficients_df %>% knitr::kable(caption = "Coeffient Estimates for Models")
+
+lasso_all <- avg_coefs_lasso2[avg_coefs_lasso2 != 0.00]
+new <- data.frame(Coefficients = c(lasso_all))
+new %>% knitr::kable(caption = "Coeffient Estimates for Lasso Two-Way")
+```
+
+
+\newpage
+
+
+# Discussion and Conclusion
+Table 7 summarizes the performance for each fitted model through sensitivity and specificity. The lasso with only one-way terms performed similar to the lasso two-way interaction. However the lasso with two-way interactions performed better, having a significantly higher specificity. The logistic model using the backward selection performedy poorly with the lowest specificity.
+
+
+In Tables 5, we observe that the lasso two-way model shrunk 30 coefficients towards zero. In contrast, the lasso with one-way interactions shrunk seven and the backward only had one zero coefficients. Having more nonzero coefficients within the model most likely affected the accuracy of the backwards model when being applied to the test data. In Table 6, we compare the closeness of the predicted coefficients for between each model. This only took into consideration the one-way interactions. As expected, both the lasso one-way and lasso two-way had the most close number of coefficient estimates due to the zero estimated coefficients from both models.  Both the Lasso one and two-way had the least similar estimated coefficients to the backward model. This difference in the lasso two-way's coefficient estimates led to the differences in model performance observed. From table 8 we can observe large differences between the estimated coefficients across all three models. Most of the non-zero coefficients for the model came from the the two-way interactions. In Table 9, we can observe the coefficients for the two-way interaction terms.
+
+The non-zero coefficients from the lasso two-way model included mainly interactions between center and other covariates. This draws attention to the differences between the centers that potentially influence the results. In moving forward, it would be of interest to consider a mixed-effects or multilevel model to account for the differences between centers. Besides center, many of the covariates also included ventilation support levels, peak oxygen levels, maternal race, and severity. The only main interactions included in this model were weight at 36 weeks and ventilation support level. Overall, these are possible variables of interest that may be helpful in predicting the need for a tracheostomy in infants which should be further investigated. 
+
+# Limitations
+A major limitation of this study is due to the amount of missing data. Due to this, data for week 44 was excluded from this analysis. Using multiple imputation, with a predictive mean method, the data was imputed. Additionally, the data provided included indicator for whether an infant died. This was not taken into consideration in this model derivation since the cause of death was not specified. The outcome of death may be due to non-tracheostomy related comorbidity. In having such information, a composite score of death and tracheostomy would be better suited. Lastly, the models were fit to predict tracheostomy outcome, but as seen from the lasso-two way coefficients, center greatly affected the results. Other models should be considered such as a linear mixed-effects of multilevel model to account for the differences between centers.
+
+# References
+Higgins, R. D., Jobe, A. H., Koso-Thomas, M., Bancalari, E., Viscardi, R. M., Hartert, T. V., Ryan, R. M., Kallapur, S. G., Steinhorn, R. H., Konduri, G. G., Davis, S. D., Thebaud, B., Clyman, R. I., Collaco, J. M., Martin, C. R., Woods, J. C., Finer, N. N., & Raju, T. N. K. (2018). Bronchopulmonary Dysplasia: Executive Summary of a Workshop. The Journal of pediatrics, 197, 300–308. https://doi.org/10.1016/j.jpeds.2018.01.043
+
+\newpage
+
+## Code Appendix:
+
+```{r get-labels, echo=FALSE}
+labs = knitr::all_labels()
+labs = setdiff(labs, c("get-labels"))
+```
+
+```{r all-code, ref.label=labs, echo=TRUE, eval=FALSE}
+```
