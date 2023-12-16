@@ -25,8 +25,8 @@ The following plot shows an example of correlations from the simulated data for 
 ![sim_corr_p3](https://github.com/aserra10/PHP2550-Projects/assets/119968598/26ecffff-11f5-48d2-acb2-182e76f438e3)
 
 The tables below show the brier score estimates for men and women from the simulation.
-![p3_est2](https://github.com/aserra10/PHP2550-Projects/assets/119968598/b6f4a4ba-bfb1-409a-a677-6ef892531b40) {:width="300px"}
-![p3_est](https://github.com/aserra10/PHP2550-Projects/assets/119968598/1743cb33-66d3-45f7-8f8b-d035a081661f) {:width="300px"}
+![p3_est2](https://github.com/aserra10/PHP2550-Projects/assets/119968598/b6f4a4ba-bfb1-409a-a677-6ef892531b40){:width="300px"}
+![p3_est](https://github.com/aserra10/PHP2550-Projects/assets/119968598/1743cb33-66d3-45f7-8f8b-d035a081661f){:width="300px"}
 
 For this project see the following files: 
 - The *Project_3_as.RMD* file includes code for the simulation and estimation of brier scores. It also includes the required packages and references. See the corresponding pdf file for easier viewing.
