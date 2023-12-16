@@ -1,4 +1,4 @@
-# Project 1: Developing Prediction Models for Tracheostomy in Infants with Severe Bronchopulmonary Dysplasia
+## Project 1: Developing Prediction Models for Tracheostomy in Infants with Severe Bronchopulmonary Dysplasia
 
 This repository contains two main files. The *pda_project.R* file provided by the instructor merged study data of both parent 
 and child into a new dataset containing parent ID as a unique identifier. The new data had included variables relating to
