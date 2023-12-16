@@ -22,4 +22,5 @@ In this project, the performance of a predictive model developed in a source pop
 the continuous variables using the mvrnorm function from the
 mvtnorm package in R. The simulation involved 1,000 repetitions, and for each repetition the brier score using an inverse-odds weighting estimator was calculated. A list of required packages and references to formulas for calculating these estimates are included in the proj3copy.RMD
 
+![image](https://github.com/aserra10/PHP2550-Projects/assets/119968598/d09f31da-3b52-4f55-9a32-32976cc9adf1)
 
