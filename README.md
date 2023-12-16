@@ -27,8 +27,6 @@ The following plot shows an example of correlations from the simulated data for 
 The tables below show the brier score estimates for men and women from the simulation.
 ![est](https://github.com/aserra10/PHP2550-Projects/assets/119968598/3921a729-d579-439d-a2d7-b5dfdf24f660)
 
-![img](https://github.com/aserra10/PHP2550-Projects/assets/119968598/94cb267f-eac5-4275-bad8-f4606a0f3ba8)
-
 ![img2](https://github.com/aserra10/PHP2550-Projects/assets/119968598/2b0b95b2-5817-4bf5-835b-f62df00cf256)
 
 
