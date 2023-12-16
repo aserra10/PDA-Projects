@@ -28,6 +28,9 @@ The tables below show the brier score estimates for men and women from the simul
 ![p3_est2](https://github.com/aserra10/PHP2550-Projects/assets/119968598/b6f4a4ba-bfb1-409a-a677-6ef892531b40){:width="300px"}
 ![p3_est](https://github.com/aserra10/PHP2550-Projects/assets/119968598/1743cb33-66d3-45f7-8f8b-d035a081661f){:width="300px"}
 
+![p3_est2](https://github.com/aserra10/PHP2550-Projects/blob/main/assets/119968598/b6f4a4ba-bfb1-409a-a677-6ef892531b40.png?raw=true){width="300px"}
+![p3_est](https://github.com/aserra10/PHP2550-Projects/blob/main/assets/119968598/1743cb33-66d3-45f7-8f8b-d035a081661f.png?raw=true){width="300px"}
+
 For this project see the following files: 
 - The *Project_3_as.RMD* file includes code for the simulation and estimation of brier scores. It also includes the required packages and references. See the corresponding pdf file for easier viewing.
 - The data used in this project is publicly available and can be accessed through R. See code for more details.
