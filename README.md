@@ -18,9 +18,18 @@ For this project see the following files:
 This project focuses on a dataset that includes baseline and demographic characteristics in addition to respiratory support information at 36 and 44 weeks PMA for infants born at or earlier than 32 weeks PMA who are at higher risk for BPD. Severity of BPD categories (Mild, Moderate, Severe) at week 36 PMA were coded using the NHLBI(2018) definition. The project two file includes code conducting a thorough examination of five tracheostomy outcome prediction models, employing four different fitting methods to select the most effective model. These four fitting methods are coded through functions: lasso, ridge, and logistic forward and logistic backward. Models undergo evaluation using positive and negative predictive value comparison, accuracy, AUC measure, and coefficient estimates. Packages needed for this evaluation are listed at the top of the file including pROC. Using the mice package in R, 5 imputed train and test datasets were generated. The models were fit on the training data and validated on the test data. The results showed that the lasso model with two-way interactions consistently outperforms its counterparts, demonstrating better predictive accuracy compared to all other fitting models. All statistical analyses were performed using R Version 4.3.1. 
 
 # Project 3: Transportability Analysis of the Framingham ATP-III Prediction Model
-In this project, the performance of a predictive model developed in a source population was evaluated when applied to a new target population. This transportability analysis was evaluated through a MC simulation using data generated separately for men and women to create a target population. A target population was simulated by first generating
-the continuous variables using the mvrnorm function from the
-mvtnorm package in R. The simulation involved 1,000 repetitions, and for each repetition the brier score using an inverse-odds weighting estimator was calculated. A list of required packages and references to formulas for calculating these estimates are included in the proj3copy.RMD
+This study assesses the transportability of the Framingham ATP-III model when transported from the source population on which it was developed to a new target population. Examining the performance of a model when being applied to a new target population, often with different characteristics than the source population, is important to gain a better understanding of how well the model performs
+in a different setting. The transportability analysis for this model was conducted through a Monte Carlo simulation with 500 repetitions where Framingham study data was used as the source and simulated NHANES data as the new target population. Performance of this predictive model was assessed using the brier score as defined in Steingrimsson et al., using an inverse-odds weighting estimator. Our results showed the mean brier estimate for men was slightly higher than the estimate for women, but overall the bias of the simulation brier estimate was relatively low for both men and women in reference to the “true” estimated from the non-simulated data. 
 
-![image](https://github.com/aserra10/PHP2550-Projects/assets/119968598/d09f31da-3b52-4f55-9a32-32976cc9adf1)
+The following plot shows an example of correlations from the simulated data for men. 
+![sim_corr_p3](https://github.com/aserra10/PHP2550-Projects/assets/119968598/26ecffff-11f5-48d2-acb2-182e76f438e3)
+
+The tables below show the brier score estimates for men and women from the simulation.
+![p3_est2](https://github.com/aserra10/PHP2550-Projects/assets/119968598/b6f4a4ba-bfb1-409a-a677-6ef892531b40)
+![p3_est](https://github.com/aserra10/PHP2550-Projects/assets/119968598/1743cb33-66d3-45f7-8f8b-d035a081661f)
+
+For this project see the following files: 
+- The *Project_3_as.RMD* file includes code for the simulation and estimation of brier scores. It also includes the required packages and references. See the corresponding pdf file for easier viewing.
+- The data used in this project is publicly available and can be accessed through R. See code for more details.
+
 
